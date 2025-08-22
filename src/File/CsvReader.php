@@ -5,7 +5,7 @@ namespace Spark\File;
 use Spark\Foundation\File\Reader;
 
 /**
- * File CSV Reader
+ * CSV File Reader
  *
  * @package Spark\File
  */
@@ -186,7 +186,7 @@ class CsvReader extends Reader
 
     /**
      * process row data
-     * 
+     *
      * @param array $row
      * @param bool $hasHeader
      * @param array|null &$headers

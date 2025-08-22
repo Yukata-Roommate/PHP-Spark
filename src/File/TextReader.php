@@ -5,7 +5,7 @@ namespace Spark\File;
 use Spark\Foundation\File\Reader;
 
 /**
- * File Text Reader
+ * Text File Reader
  *
  * @package Spark\File
  */
@@ -34,7 +34,7 @@ class TextReader extends Reader
     public function readLines(int $start = 1): array
     {
         if (!$this->validate()) return [];
-    
+
         return iterator_to_array($this->lines($start), false);
     }
 
