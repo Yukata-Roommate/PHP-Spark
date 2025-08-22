@@ -34,12 +34,8 @@ class TextReader extends Reader
     public function readLines(int $start = 1): array
     {
         if (!$this->validate()) return [];
-
-        $data = file($this->path(), FILE_IGNORE_NEW_LINES);
-
-        if (!is_array($data)) return [];
-
-        return array_slice($data, $start - 1);
+    
+        return iterator_to_array($this->lines($start), false);
     }
 
     /**
@@ -54,15 +50,9 @@ class TextReader extends Reader
 
         if ($file === null) return;
 
-        $loop = 0;
+        if ($start > 1) $file->seek($start - 1);
 
-        while (!$file->eof()) {
-            $loop++;
-
-            $line = $file->fgets();
-
-            if ($loop < $start) continue;
-
+        foreach ($file as $line) {
             if ($line === false) continue;
 
             yield rtrim($line, "\n\r");
@@ -81,14 +71,12 @@ class TextReader extends Reader
 
         if ($stream === null) return;
 
-        $loop = 0;
-
         try {
+            for ($i = 1; $i < $start; $i++) {
+                if (fgets($stream) === false) break;
+            }
+
             while (($line = fgets($stream)) !== false) {
-                $loop++;
-
-                if ($loop < $start) continue;
-
                 yield rtrim($line, "\n\r");
             }
         } finally {
@@ -105,11 +93,7 @@ class TextReader extends Reader
      */
     public function readByChunk(int $row = 1, int $start = 1): array
     {
-        $data = $this->readLines($start);
-
-        if (empty($data)) return [];
-
-        return array_chunk($data, $row);
+        return iterator_to_array($this->chunks($row, $start), false);
     }
 
     /**
@@ -126,11 +110,11 @@ class TextReader extends Reader
         foreach ($this->lines($start) as $line) {
             $chunk[] = $line;
 
-            if (count($chunk) < $row) continue;
+            if (count($chunk) >= $row) {
+                yield $chunk;
 
-            yield $chunk;
-
-            $chunk = [];
+                $chunk = [];
+            }
         }
 
         if (count($chunk) > 0) yield $chunk;
