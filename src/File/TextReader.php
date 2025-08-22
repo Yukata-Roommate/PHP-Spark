@@ -85,19 +85,7 @@ class TextReader extends Reader
     }
 
     /**
-     * read file by chunk
-     *
-     * @param int $row
-     * @param int $start
-     * @return array
-     */
-    public function readByChunk(int $row = 1, int $start = 1): array
-    {
-        return iterator_to_array($this->chunks($row, $start), false);
-    }
-
-    /**
-     * iterate through file by chunk
+     * iterate through file chunks
      *
      * @param int $row
      * @param int $start
