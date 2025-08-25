@@ -18,24 +18,24 @@ class Operator extends Pathinfo
     /**
      * create file
      *
-     * @param int|null $mode
-     * @param string|null $user
-     * @param string|null $group
+     * @param int|null $time
+     * @param int|null $atime
      * @return static|null
      */
-    public function create(int|null $mode = null, string|null $user = null, string|null $group = null): static|null
+    public function create(int|null $time = null, int|null $atime = null): static|null
     {
         if ($this->isExists()) return null;
 
         if (!$this->isDirExists()) $this->createDir();
 
-        $touch = touch($this->path());
+        $touch = match (true) {
+            is_null($time)  => touch($this->path()),
+            is_null($atime) => touch($this->path(), $time),
+
+            default => touch($this->path(), $time, $atime),
+        };
 
         if (!$touch) return null;
-
-        $chperm = $this->chperm($mode, $user, $group);
-
-        if (!$chperm) return null;
 
         return $this;
     }
@@ -50,6 +50,22 @@ class Operator extends Pathinfo
         if ($this->isDirExists()) return false;
 
         return mkdir($this->dirname(), 0755, true);
+    }
+
+    /**
+     * create file if not exists
+     *
+     * @param int|null $time
+     * @param int|null $atime
+     * @return bool
+     */
+    public function createIfNotExists(int|null $time = null, int|null $atime = null): bool
+    {
+        if ($this->isExists()) return true;
+
+        $static = $this->create($time, $atime);
+
+        return $static !== null;
     }
 
     /*----------------------------------------*
@@ -112,6 +128,58 @@ class Operator extends Pathinfo
         $result = rename($this->path(), $move->path());
 
         return $result ? $move : null;
+    }
+
+    /**
+     * move to temp file
+     *
+     * @param string|null $destination
+     * @return static|null
+     */
+    public function temp(string|null $destination = null): static|null
+    {
+        $destination = $destination ?? sys_get_temp_dir() . DIRECTORY_SEPARATOR . uniqid("spark_", true) . "." . $this->extension();
+
+        return $this->move($destination);
+    }
+
+    /**
+     * move temp to original
+     *
+     * @param string|null $destination
+     * @return static|null
+     */
+    public function restore(string|null $destination = null): static|null
+    {
+        $destination = $destination ?? $this->path();
+
+        return $this->move($destination);
+    }
+
+    /**
+     * move to backup file
+     *
+     * @param string|null $destination
+     * @return static|null
+     */
+    public function backup(string|null $destination = null): static|null
+    {
+        $destination = $destination ?? $this->path() . ".bak";
+
+        return $this->move($destination);
+    }
+
+    /**
+     * move backup to original
+     *
+     * @param string|null $destination
+     * @return static|null
+     */
+    public function restoreBackup(string|null $destination = null): static|null
+    {
+        $destination = $destination ?? $this->path();
+
+        return $this->move($destination);
     }
 
     /*----------------------------------------*

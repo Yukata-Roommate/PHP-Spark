@@ -1,13 +1,13 @@
 <?php
 
-namespace Spark\Supports\Global;
+namespace Spark\Supports\Superglobals;
 
 use Spark\Foundation\Entity\ReferenceHandler;
 
 /**
  * Post Reference
  *
- * @package Spark\Supports\Global
+ * @package Spark\Supports\Superglobals
  */
 class Post extends ReferenceHandler
 {

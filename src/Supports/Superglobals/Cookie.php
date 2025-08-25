@@ -1,13 +1,13 @@
 <?php
 
-namespace Spark\Supports\Global;
+namespace Spark\Supports\Superglobals;
 
 use Spark\Foundation\Entity\Reference;
 
 /**
  * Cookie Reference
  *
- * @package Spark\Supports\Global
+ * @package Spark\Supports\Superglobals
  */
 class Cookie extends Reference
 {

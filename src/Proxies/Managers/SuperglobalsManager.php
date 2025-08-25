@@ -1,24 +1,24 @@
 <?php
 
-namespace Spark\Proxies\Managers\Supports;
+namespace Spark\Proxies\Managers;
 
 use Spark\Foundation\Proxy\SingletonManager;
 
-use Spark\Supports\Global\Cookie;
-use Spark\Supports\Global\Env;
-use Spark\Supports\Global\Files;
-use Spark\Supports\Global\Get;
-use Spark\Supports\Global\Globals;
-use Spark\Supports\Global\Post;
-use Spark\Supports\Global\Server;
-use Spark\Supports\Global\Session;
+use Spark\Supports\Superglobals\Cookie;
+use Spark\Supports\Superglobals\Env;
+use Spark\Supports\Superglobals\Files;
+use Spark\Supports\Superglobals\Get;
+use Spark\Supports\Superglobals\Globals;
+use Spark\Supports\Superglobals\Post;
+use Spark\Supports\Superglobals\Server;
+use Spark\Supports\Superglobals\Session;
 
 /**
- * Supports Global Proxy Manager
+ * Superglobals Proxy Manager
  *
- * @package Spark\Proxies\Managers\Supports
+ * @package Spark\Proxies\Managers
  */
-class GlobalManager extends SingletonManager
+class SuperglobalsManager extends SingletonManager
 {
     /*----------------------------------------*
      * Singleton
@@ -48,7 +48,7 @@ class GlobalManager extends SingletonManager
     /**
      * get cookie reference
      *
-     * @return \Spark\Supports\Global\Cookie
+     * @return \Spark\Supports\Superglobals\Cookie
      */
     public function cookie(): Cookie
     {
@@ -58,7 +58,7 @@ class GlobalManager extends SingletonManager
     /**
      * get env reference
      *
-     * @return \Spark\Supports\Global\Env
+     * @return \Spark\Supports\Superglobals\Env
      */
     public function env(): Env
     {
@@ -68,7 +68,7 @@ class GlobalManager extends SingletonManager
     /**
      * get files reference
      *
-     * @return \Spark\Supports\Global\Files
+     * @return \Spark\Supports\Superglobals\Files
      */
     public function files(): Files
     {
@@ -78,7 +78,7 @@ class GlobalManager extends SingletonManager
     /**
      * get get reference
      *
-     * @return \Spark\Supports\Global\Get
+     * @return \Spark\Supports\Superglobals\Get
      */
     public function get(): Get
     {
@@ -88,7 +88,7 @@ class GlobalManager extends SingletonManager
     /**
      * get globals reference
      *
-     * @return \Spark\Supports\Global\Globals
+     * @return \Spark\Supports\Superglobals\Superglobalss
      */
     public function globals(): Globals
     {
@@ -98,7 +98,7 @@ class GlobalManager extends SingletonManager
     /**
      * get post reference
      *
-     * @return \Spark\Supports\Global\Post
+     * @return \Spark\Supports\Superglobals\Post
      */
     public function post(): Post
     {
@@ -108,7 +108,7 @@ class GlobalManager extends SingletonManager
     /**
      * get server reference
      *
-     * @return \Spark\Supports\Global\Server
+     * @return \Spark\Supports\Superglobals\Server
      */
     public function server(): Server
     {
@@ -118,7 +118,7 @@ class GlobalManager extends SingletonManager
     /**
      * get session reference
      *
-     * @return \Spark\Supports\Global\Session
+     * @return \Spark\Supports\Superglobals\Session
      */
     public function session(): Session
     {
