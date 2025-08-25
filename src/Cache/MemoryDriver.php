@@ -61,6 +61,8 @@ class MemoryDriver extends Driver implements MemoryDriverContract
      */
     public function setMaxItems(int|null $maxItems): static
     {
+        if ($maxItems !== null && $maxItems <= 0) throw new \InvalidArgumentException("Max items must be a positive integer or null.");
+
         $this->maxItems = $maxItems;
 
         if ($this->maxItems === null) return $this;
@@ -80,6 +82,8 @@ class MemoryDriver extends Driver implements MemoryDriverContract
      */
     public function setMemoryLimit(int|null $memoryLimit): static
     {
+        if ($memoryLimit !== null && $memoryLimit <= 0) throw new \InvalidArgumentException("Memory limit must be a positive integer or null.");
+
         $this->memoryLimit = $memoryLimit;
 
         if ($this->memoryLimit === null) return $this;
@@ -192,7 +196,7 @@ class MemoryDriver extends Driver implements MemoryDriverContract
     {
         if ($this->maxItems === null) return;
 
-        if (!$this->has($key)) return;
+        if ($this->has($key)) return;
 
         while (count($this->storage) >= $this->maxItems) {
             $this->evict();
@@ -230,7 +234,7 @@ class MemoryDriver extends Driver implements MemoryDriverContract
      */
     protected function remove(string $key): void
     {
-        unset($this->storage[$key], $this->accessTime[$key]);
+        unset($this->storage[$key], $this->accessTimes[$key]);
     }
 
     /**

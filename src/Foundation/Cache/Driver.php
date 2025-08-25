@@ -39,7 +39,7 @@ abstract class Driver implements DriverContract
      */
     public function load(string $key): mixed
     {
-        if (!$this->has($key)) throw new \InvalidArgumentException("Cache key \"$key\" does not exist.");
+        if (!$this->has($key)) throw new \RuntimeException("Cache key \"$key\" does not exist.");
 
         $data = $this->read($key);
 
@@ -48,7 +48,7 @@ abstract class Driver implements DriverContract
         if ($this->isExpired($validated)) {
             $this->delete($key);
 
-            throw new \InvalidArgumentException("Cache key \"$key\" has expired.");
+            throw new \RuntimeException("Cache key \"$key\" has expired.");
         }
 
         $this->loaded($key, $validated);
@@ -165,6 +165,8 @@ abstract class Driver implements DriverContract
      */
     public function save(string $key, mixed $value, int|null $ttl = null): array
     {
+        if ($ttl !== null && $ttl < 0) throw new \InvalidArgumentException("TTL must be a positive integer or null.");
+
         $this->prepareSave($key, $value, $ttl);
 
         $data = $this->buildDataStructure($value, $ttl);
@@ -222,7 +224,7 @@ abstract class Driver implements DriverContract
     {
         $value = $this->safeLoad($key, 0);
 
-        if (!is_numeric($value)) throw new \InvalidArgumentException("Cache value for key \"{$key}\" is not numeric.");
+        if (!is_numeric($value)) throw new \RuntimeException("Cache value for key \"{$key}\" is not numeric.");
 
         $newValue = (int)$value + $step;
 
@@ -319,15 +321,15 @@ abstract class Driver implements DriverContract
      */
     protected function ensureDataStructure(mixed $data): array
     {
-        if (!is_array($data)) throw new \InvalidArgumentException("Data must be an array, " . gettype($data) . " given.");
+        if (!is_array($data)) throw new \RuntimeException("Data must be an array, " . gettype($data) . " given.");
 
-        if (!array_key_exists("value", $data)) throw new \InvalidArgumentException("Data must contain a \"value\" key.");
+        if (!array_key_exists("value", $data)) throw new \RuntimeException("Data must contain a \"value\" key.");
 
-        if (!array_key_exists("created_at", $data)) throw new \InvalidArgumentException("Data must contain an \"created_at\" key.");
+        if (!array_key_exists("created_at", $data)) throw new \RuntimeException("Data must contain an \"created_at\" key.");
 
-        if (!array_key_exists("expires_at", $data)) throw new \InvalidArgumentException("Data must contain a \"expires_at\" key.");
+        if (!array_key_exists("expires_at", $data)) throw new \RuntimeException("Data must contain a \"expires_at\" key.");
 
-        if (!array_key_exists("metadata", $data)) throw new \InvalidArgumentException("Data must contain a \"metadata\" key.");
+        if (!array_key_exists("metadata", $data)) throw new \RuntimeException("Data must contain a \"metadata\" key.");
 
         return $data;
     }
@@ -364,8 +366,6 @@ abstract class Driver implements DriverContract
     protected function buildExpiresAt(int $now, int|null $ttl): int|null
     {
         if ($ttl === null) return null;
-
-        if ($ttl < 0) throw new \InvalidArgumentException("TTL must be a positive integer or null.");
 
         return $now + $ttl;
     }

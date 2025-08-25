@@ -54,9 +54,11 @@ class FileDriver extends Driver implements FileDriverContract
     {
         $this->directory = rtrim($directory, DIRECTORY_SEPARATOR);
 
-        if (!is_dir($this->directory)) mkdir($this->directory, 0755, true);
+        if (is_dir($this->directory)) return $this;
 
-        return $this;
+        if (mkdir($this->directory, 0755, true)) return $this;
+
+        throw new \RuntimeException("Failed to create cache directory: $this->directory");
     }
 
     /**
@@ -73,7 +75,11 @@ class FileDriver extends Driver implements FileDriverContract
 
         $directory = $this->directory . DIRECTORY_SEPARATOR . $subDirectory;
 
-        if (!is_dir($directory)) mkdir($directory, 0755, true);
+        if (!is_dir($directory)) {
+            if (!mkdir($directory, 0755, true)) {
+                throw new \RuntimeException("Failed to create cache subdirectory: $directory");
+            }
+        }
 
         $fileName  = $hash . $this->extension;
 
@@ -165,15 +171,17 @@ class FileDriver extends Driver implements FileDriverContract
      */
     protected function read(string $key): mixed
     {
-        if (!$this->has($key)) throw new \RuntimeException("Cache file does not exist. key: $key");
-
         $filePath = $this->filePath($key);
 
         $data = file_get_contents($filePath);
 
         if ($data === false) throw new \RuntimeException("Failed to read cache file: $filePath");
 
-        return unserialize($data);
+        $unserialized = unserialize($data);
+
+        if ($unserialized === false && $data !== serialize(false)) throw new \RuntimeException("Failed to unserialize cache data for key: $key");
+
+        return $unserialized;
     }
 
     /*----------------------------------------*
@@ -195,9 +203,7 @@ class FileDriver extends Driver implements FileDriverContract
 
         $serialized = serialize($data);
 
-        if (file_put_contents($filePath, $serialized)) return;
-
-        throw new \RuntimeException("Failed to write cache file: $filePath");
+        if (file_put_contents($filePath, $serialized, LOCK_EX) === false) throw new \RuntimeException("Failed to write cache file: $filePath");
     }
 
     /*----------------------------------------*
@@ -227,12 +233,13 @@ class FileDriver extends Driver implements FileDriverContract
     protected function flush(): void
     {
         foreach ($this->files(\RecursiveIteratorIterator::CHILD_FIRST) as $fileinfo) {
-            match (true) {
-                $fileinfo->isDir()  => rmdir($fileinfo->getRealPath()),
-                $fileinfo->isFile() => unlink($fileinfo->getRealPath()),
+            $path = $fileinfo->getRealPath();
 
-                default => throw new \RuntimeException("Unknown file type: " . $fileinfo->getRealPath()),
-            };
+            if ($fileinfo->isDir()) {
+                if (!rmdir($path)) throw new \RuntimeException("Failed to remove directory: $path");
+            } else if ($fileinfo->isFile()) {
+                if (!unlink($path)) throw new \RuntimeException("Failed to remove file: $path");
+            }
         }
     }
 
@@ -254,6 +261,8 @@ class FileDriver extends Driver implements FileDriverContract
                 if ($data === false) continue;
 
                 $unserialized = unserialize($data);
+
+                if ($unserialized === false) continue;
 
                 $validated = $this->ensureDataStructure($unserialized);
 
