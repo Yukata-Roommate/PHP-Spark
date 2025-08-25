@@ -18,60 +18,28 @@ abstract class Reader extends Pathinfo
     /**
      * read file
      *
-     * @return mixed
+     * @return array
      */
-    abstract public function read(): mixed;
-
-    /**
-     * read raw file content
-     *
-     * @return string|null
-     */
-    protected function readRaw(): string|null
+    public function read(): array
     {
-        if (!$this->validate()) return null;
-
-        $data = file_get_contents($this->path());
-
-        return is_string($data) ? $data : null;
+        return iterator_to_array($this->lines(), false);
     }
 
     /**
-     * read file with callback using stream
+     * iterate through file lines
      *
-     * @param callable $callback
-     * @return mixed
+     * @param int $start
+     * @return \Generator
      */
-    protected function readWithStream(callable $callback): mixed
+    public function lines(int $start = 1): \Generator
     {
-        $stream = $this->openStream();
+        $file = $this->openFileObject();
 
-        if ($stream === null) return null;
+        if ($file === null) return;
 
-        try {
-            $result = $callback($stream);
-        } finally {
-            fclose($stream);
-        }
+        if ($start > 1) $file->seek($start - 1);
 
-        return $result;
-    }
-
-    /*----------------------------------------*
-     * Resource
-     *----------------------------------------*/
-
-    /**
-     * get file stream
-     *
-     * @param string $mode
-     * @return resource|null
-     */
-    protected function openStream(string $mode = "r")
-    {
-        if (!$this->validate()) return null;
-
-        return fopen($this->path(), $mode);
+        yield from $this->iterateFile($file);
     }
 
     /**
@@ -91,6 +59,140 @@ abstract class Reader extends Pathinfo
         }
     }
 
+    /**
+     * iterate file
+     *
+     * @param \SplFileObject $file
+     * @return \Generator
+     */
+    abstract protected function iterateFile(\SplFileObject $file): \Generator;
+
+    /**
+     * iterate through file chunks
+     *
+     * @param int $row
+     * @param int $start
+     * @return \Generator
+     */
+    public function chunks(int $row = 1, int $start = 1): \Generator
+    {
+        $chunk = [];
+
+        foreach ($this->lines($start) as $line) {
+            $chunk[] = $line;
+
+            if (count($chunk) >= $row) {
+                yield $chunk;
+
+                $chunk = [];
+            }
+        }
+
+        if (count($chunk) > 0) yield $chunk;
+    }
+
+    /*----------------------------------------*
+     * Stream
+     *----------------------------------------*/
+
+    /**
+     * iterate through file stream
+     *
+     * @param int $start
+     * @return \Generator
+     */
+    public function stream(int $start = 1): \Generator
+    {
+        $stream = $this->openStream();
+
+        if ($stream === null) return;
+
+        try {
+            for ($i = 1; $i < $start; $i++) {
+                if (fgets($stream) === false) break;
+            }
+
+            yield from $this->iterateStream($stream);
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    /**
+     * get file stream
+     *
+     * @param string $mode
+     * @return resource|null
+     */
+    protected function openStream(string $mode = "r")
+    {
+        if (!$this->validate()) return null;
+
+        return fopen($this->path(), $mode);
+    }
+
+    /**
+     * iterate stream
+     *
+     * @param resource $stream
+     * @return \Generator
+     */
+    abstract protected function iterateStream($stream): \Generator;
+
+    /*----------------------------------------*
+     * Collection
+     *----------------------------------------*/
+
+    /**
+     * map rows by callback
+     *
+     * @param callable $callback
+     * @param int $start
+     * @return \Generator
+     */
+    public function map(callable $callback, int $start = 1): \Generator
+    {
+        foreach ($this->lines($start) as $line) {
+            yield $callback($line);
+        }
+    }
+
+    /**
+     * filter rows by callback
+     *
+     * @param callable $callback
+     * @param int $start
+     * @return \Generator
+     */
+    public function filter(callable $callback, int $start = 1): \Generator
+    {
+        foreach ($this->lines($start) as $line) {
+            if (!$callback($line)) continue;
+
+            yield $line;
+        }
+    }
+
+    /*----------------------------------------*
+     * Count
+     *----------------------------------------*/
+
+    /**
+     * count lines
+     *
+     * @return int
+     */
+    public function count(): int
+    {
+        $count = 0;
+
+        foreach ($this->lines() as $line) {
+            $count++;
+        }
+
+        return $count;
+    }
+
     /*----------------------------------------*
      * Validate
      *----------------------------------------*/
@@ -106,32 +208,6 @@ abstract class Reader extends Pathinfo
 
         if (!$this->isReadable()) return false;
 
-        if (!$this->isSupported()) return false;
-
-        return $this->validateFormat();
+        return true;
     }
-
-    /**
-     * whether file extension is supported
-     *
-     * @return bool
-     */
-    public function isSupported(): bool
-    {
-        return in_array($this->extension(), $this->supportedExtensions());
-    }
-
-    /**
-     * get supported file extensions
-     *
-     * @return array
-     */
-    abstract public function supportedExtensions(): array;
-
-    /**
-     * validate file format
-     *
-     * @return bool
-     */
-    abstract protected function validateFormat(): bool;
 }
