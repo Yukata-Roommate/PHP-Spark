@@ -4,6 +4,12 @@ namespace Spark\Foundation\Cache;
 
 use Spark\Contracts\Cache\Driver as DriverContract;
 
+use Spark\Exceptions\Cache\CacheException;
+use Spark\Exceptions\Cache\CacheKeyNotFoundException;
+use Spark\Exceptions\Cache\CacheKeyExpiredException;
+use Spark\Exceptions\Cache\CacheDataCorruptedException;
+use Spark\Exceptions\Cache\InvalidCacheArgumentException;
+
 /**
  * Cache Driver
  *
@@ -16,7 +22,7 @@ abstract class Driver implements DriverContract
      *----------------------------------------*/
 
     /**
-     * whether key exists in storage
+     * Check if key exists in storage
      *
      * @param string $key
      * @return bool
@@ -24,7 +30,7 @@ abstract class Driver implements DriverContract
     abstract protected function has(string $key): bool;
 
     /**
-     * read raw data from storage
+     * Read raw data from storage
      *
      * @param string $key
      * @return mixed
@@ -32,14 +38,11 @@ abstract class Driver implements DriverContract
     abstract protected function read(string $key): mixed;
 
     /**
-     * load cache value
-     *
-     * @param string $key
-     * @return mixed
+     * {@inheritDoc}
      */
     public function load(string $key): mixed
     {
-        if (!$this->has($key)) throw new \RuntimeException("Cache key \"$key\" does not exist.");
+        if (!$this->has($key)) throw new CacheKeyNotFoundException($key);
 
         $data = $this->read($key);
 
@@ -48,7 +51,7 @@ abstract class Driver implements DriverContract
         if ($this->isExpired($validated)) {
             $this->delete($key);
 
-            throw new \RuntimeException("Cache key \"$key\" has expired.");
+            throw new CacheKeyExpiredException($key);
         }
 
         $this->loaded($key, $validated);
@@ -57,35 +60,31 @@ abstract class Driver implements DriverContract
     }
 
     /**
-     * loaded
+     * Hook called after successful load
      *
      * @param string $key
      * @param array $data
      * @return void
      */
-    protected function loaded(string $key, array &$data): void {}
+    protected function loaded(string $key, array &$data): void
+    {
+        // Override in subclasses if needed
+    }
 
     /**
-     * safely load cache value
-     *
-     * @param string $key
-     * @param mixed $default
-     * @return mixed
+     * {@inheritDoc}
      */
     public function safeLoad(string $key, mixed $default = null): mixed
     {
         try {
             return $this->load($key);
-        } catch (\Throwable $e) {
+        } catch (CacheException) {
             return $default;
         }
     }
 
     /**
-     * load multiple cache values
-     *
-     * @param array $keys
-     * @return array
+     * {@inheritDoc}
      */
     public function loadMany(array $keys): array
     {
@@ -99,12 +98,7 @@ abstract class Driver implements DriverContract
     }
 
     /**
-     * get cache value ensure exists
-     *
-     * @param string $key
-     * @param callable $callback
-     * @param int|null $ttl
-     * @return mixed
+     * {@inheritDoc}
      */
     public function remember(string $key, callable $callback, int|null $ttl = null): mixed
     {
@@ -118,10 +112,7 @@ abstract class Driver implements DriverContract
     }
 
     /**
-     * whether exists cache value
-     *
-     * @param string $key
-     * @return bool
+     * {@inheritDoc}
      */
     public function exists(string $key): bool
     {
@@ -137,7 +128,7 @@ abstract class Driver implements DriverContract
             $this->delete($key);
 
             return false;
-        } catch (\Throwable $e) {
+        } catch (CacheException) {
             return false;
         }
     }
@@ -147,7 +138,7 @@ abstract class Driver implements DriverContract
      *----------------------------------------*/
 
     /**
-     * write data to storage
+     * Write data to storage
      *
      * @param string $key
      * @param array $data
@@ -156,16 +147,13 @@ abstract class Driver implements DriverContract
     abstract protected function write(string $key, array $data): void;
 
     /**
-     * save cache value
-     *
-     * @param string $key
-     * @param mixed $value
-     * @param int|null $ttl
-     * @return array
+     * {@inheritDoc}
      */
-    public function save(string $key, mixed $value, int|null $ttl = null): array
+    public function save(string $key, mixed $value, int|null $ttl = null): bool
     {
-        if ($ttl !== null && $ttl < 0) throw new \InvalidArgumentException("TTL must be a positive integer or null.");
+        $ttl = $ttl ?? $this->defaultTtl;
+
+        if ($ttl !== null && $ttl < 0) throw new InvalidCacheArgumentException("TTL must be a positive integer or null, {$ttl} given.");
 
         $this->prepareSave($key, $value, $ttl);
 
@@ -175,56 +163,58 @@ abstract class Driver implements DriverContract
 
         $this->saved($key, $data);
 
-        return $data;
+        return true;
     }
 
     /**
-     * prepare saving
+     * Hook called before saving
      *
      * @param string $key
      * @param mixed $value
      * @param int|null $ttl
      * @return void
      */
-    protected function prepareSave(string $key, mixed &$value, int|null $ttl = null): void {}
+    protected function prepareSave(string $key, mixed &$value, int|null $ttl = null): void
+    {
+        // Override in subclasses if needed
+    }
 
     /**
-     * saved
+     * Hook called after successful save
      *
      * @param string $key
      * @param array $data
      * @return void
      */
-    protected function saved(string $key, array &$data): void {}
-
-    /**
-     * save multiple cache values
-     *
-     * @param array $values
-     * @param int|null $ttl
-     * @return int
-     */
-    public function saveMany(array $values, int|null $ttl = null): int
+    protected function saved(string $key, array &$data): void
     {
-        foreach ($values as $key => $value) {
-            $this->save($key, $value, $ttl);
-        }
-
-        return count($values);
+        // Override in subclasses if needed
     }
 
     /**
-     * increment numeric cache value
-     *
-     * @param string $key
-     * @param int $step
-     * @return int
+     * {@inheritDoc}
+     */
+    public function saveMany(array $values, int|null $ttl = null): int
+    {
+        $count = 0;
+
+        foreach ($values as $key => $value) {
+            if (!$this->save($key, $value, $ttl)) continue;
+
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * {@inheritDoc}
      */
     public function increment(string $key, int $step = 1): int
     {
         $value = $this->safeLoad($key, 0);
 
-        if (!is_numeric($value)) throw new \RuntimeException("Cache value for key \"{$key}\" is not numeric.");
+        if (!is_numeric($value)) throw new InvalidCacheArgumentException("Cache value for key \"$key\" is not numeric, " . gettype($value) . " given.");
 
         $newValue = (int)$value + $step;
 
@@ -234,11 +224,7 @@ abstract class Driver implements DriverContract
     }
 
     /**
-     * decrement numeric cache value
-     *
-     * @param string $key
-     * @param int $step
-     * @return int
+     * {@inheritDoc}
      */
     public function decrement(string $key, int $step = 1): int
     {
@@ -250,7 +236,7 @@ abstract class Driver implements DriverContract
      *----------------------------------------*/
 
     /**
-     * remove cache value from storage
+     * Remove cache value from storage
      *
      * @param string $key
      * @return void
@@ -258,24 +244,21 @@ abstract class Driver implements DriverContract
     abstract protected function remove(string $key): void;
 
     /**
-     * flush all cache values from storage
+     * Flush all cache values from storage
      *
      * @return void
      */
     abstract protected function flush(): void;
 
     /**
-     * clean expired cache values
+     * Clean expired cache values
      *
      * @return int
      */
     abstract public function clean(): int;
 
     /**
-     * delete cache value
-     *
-     * @param string $key
-     * @return void
+     * {@inheritDoc}
      */
     public function delete(string $key): void
     {
@@ -285,9 +268,7 @@ abstract class Driver implements DriverContract
     }
 
     /**
-     * clear all cache values
-     *
-     * @return void
+     * {@inheritDoc}
      */
     public function clear(): void
     {
@@ -295,18 +276,19 @@ abstract class Driver implements DriverContract
     }
 
     /**
-     * delete multiple cache values
-     *
-     * @param array $keys
-     * @return int
+     * {@inheritDoc}
      */
     public function deleteMany(array $keys): int
     {
+        $count = 0;
+
         foreach ($keys as $key) {
             $this->delete($key);
+
+            $count++;
         }
 
-        return count($keys);
+        return $count;
     }
 
     /*----------------------------------------*
@@ -314,28 +296,28 @@ abstract class Driver implements DriverContract
      *----------------------------------------*/
 
     /**
-     * ensure data structure
+     * Ensure data structure is valid
      *
      * @param mixed $data
      * @return array
      */
     protected function ensureDataStructure(mixed $data): array
     {
-        if (!is_array($data)) throw new \RuntimeException("Data must be an array, " . gettype($data) . " given.");
+        if (!is_array($data)) throw new CacheDataCorruptedException("Cache data must be an array, " . gettype($data) . " given.");
 
-        if (!array_key_exists("value", $data)) throw new \RuntimeException("Data must contain a \"value\" key.");
+        $requiredKeys = ["value", "created_at", "expires_at", "metadata"];
 
-        if (!array_key_exists("created_at", $data)) throw new \RuntimeException("Data must contain an \"created_at\" key.");
+        foreach ($requiredKeys as $key) {
+            if (array_key_exists($key, $data)) continue;
 
-        if (!array_key_exists("expires_at", $data)) throw new \RuntimeException("Data must contain a \"expires_at\" key.");
-
-        if (!array_key_exists("metadata", $data)) throw new \RuntimeException("Data must contain a \"metadata\" key.");
+            throw new CacheDataCorruptedException("Cache data must contain a \"$key\" key.");
+        }
 
         return $data;
     }
 
     /**
-     * build data structure
+     * Build data structure for storage
      *
      * @param mixed $value
      * @param int|null $ttl
@@ -357,7 +339,7 @@ abstract class Driver implements DriverContract
     }
 
     /**
-     * build expires at
+     * Calculate expiration timestamp
      *
      * @param int $now
      * @param int|null $ttl
@@ -365,13 +347,11 @@ abstract class Driver implements DriverContract
      */
     protected function buildExpiresAt(int $now, int|null $ttl): int|null
     {
-        if ($ttl === null) return null;
-
-        return $now + $ttl;
+        return $ttl === null ? null : $now + $ttl;
     }
 
     /**
-     * build metadata
+     * Build metadata for cached value
      *
      * @param mixed $value
      * @return array
@@ -388,7 +368,7 @@ abstract class Driver implements DriverContract
     }
 
     /**
-     * whether data is expired
+     * Check if data has expired
      *
      * @param array $data
      * @return bool
@@ -403,29 +383,24 @@ abstract class Driver implements DriverContract
      *----------------------------------------*/
 
     /**
-     * default ttl in seconds
+     * Default TTL in seconds
      *
      * @var int|null
      */
     protected int|null $defaultTtl = null;
 
     /**
-     * set default ttl
-     *
-     * @param int|null $ttl
-     * @return void
+     * {@inheritDoc}
      */
     public function setDefaultTtl(int|null $ttl): void
     {
-        if ($ttl !== null && $ttl < 0) throw new \InvalidArgumentException("TTL must be a positive integer or null.");
+        if ($ttl !== null && $ttl < 0) throw new InvalidCacheArgumentException("TTL must be a positive integer or null, {$ttl} given.");
 
         $this->defaultTtl = $ttl;
     }
 
     /**
-     * get default ttl
-     *
-     * @return int|null
+     * {@inheritDoc}
      */
     public function defaultTtl(): int|null
     {

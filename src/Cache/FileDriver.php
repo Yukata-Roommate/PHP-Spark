@@ -5,6 +5,10 @@ namespace Spark\Cache;
 use Spark\Contracts\Cache\FileDriver as FileDriverContract;
 use Spark\Foundation\Cache\Driver;
 
+use Spark\Exceptions\Cache\CacheException;
+use Spark\Exceptions\Cache\CacheStorageException;
+use Spark\Exceptions\Cache\CacheDataCorruptedException;
+
 /**
  * File Cache Driver
  *
@@ -17,7 +21,7 @@ class FileDriver extends Driver implements FileDriverContract
      *----------------------------------------*/
 
     /**
-     * constructor
+     * Constructor
      *
      * @param string $directory
      */
@@ -31,21 +35,21 @@ class FileDriver extends Driver implements FileDriverContract
      *----------------------------------------*/
 
     /**
-     * cache directory
+     * Cache directory
      *
      * @var string
      */
     protected string $directory;
 
     /**
-     * cache file extension
+     * Cache file extension
      *
      * @var string
      */
     protected string $extension = ".cache.php";
 
     /**
-     * set cache directory
+     * Set cache directory
      *
      * @param string $directory
      * @return static
@@ -58,11 +62,11 @@ class FileDriver extends Driver implements FileDriverContract
 
         if (mkdir($this->directory, 0755, true)) return $this;
 
-        throw new \RuntimeException("Failed to create cache directory: $this->directory");
+        throw new CacheStorageException("create_directory", "Failed to create cache directory: {$this->directory}");
     }
 
     /**
-     * get cache file path
+     * Get cache file path
      *
      * @param string $key
      * @return string
@@ -75,43 +79,45 @@ class FileDriver extends Driver implements FileDriverContract
 
         $directory = $this->directory . DIRECTORY_SEPARATOR . $subDirectory;
 
-        if (!is_dir($directory)) {
-            if (!mkdir($directory, 0755, true)) {
-                throw new \RuntimeException("Failed to create cache subdirectory: $directory");
-            }
-        }
+        if (!is_dir($directory) && !mkdir($directory, 0755, true)) throw new CacheStorageException("create_subdirectory", "Failed to create cache subdirectory: $directory");
 
-        $fileName  = $hash . $this->extension;
+        $fileName = $hash . $this->extension;
 
         return $directory . DIRECTORY_SEPARATOR . $fileName;
     }
 
     /**
-     * get files iterator
+     * Get files iterator
      *
      * @param int $mode
      * @return \Generator<\SplFileInfo>
      */
     protected function files(int $mode): \Generator
     {
-        $directoryIterator = new \RecursiveDirectoryIterator(
-            $this->directory,
-            \RecursiveDirectoryIterator::SKIP_DOTS
-        );
+        if (!is_dir($this->directory)) return;
 
-        $files = new \RecursiveIteratorIterator($directoryIterator, $mode);
+        try {
+            $directoryIterator = new \RecursiveDirectoryIterator(
+                $this->directory,
+                \RecursiveDirectoryIterator::SKIP_DOTS
+            );
 
-        foreach ($files as $file) {
-            if ($file->isDir()) {
-                yield $file;
-            } else if ($file->isFile() && str_ends_with($file->getFilename(), $this->extension)) {
-                yield $file;
+            $files = new \RecursiveIteratorIterator($directoryIterator, $mode);
+
+            foreach ($files as $file) {
+                if ($file->isDir()) {
+                    yield $file;
+                } else if ($file->isFile() && str_ends_with($file->getFilename(), $this->extension)) {
+                    yield $file;
+                }
             }
+        } catch (\UnexpectedValueException $e) {
+            return;
         }
     }
 
     /**
-     * get disk usage
+     * Get disk usage in bytes
      *
      * @return int
      */
@@ -129,7 +135,7 @@ class FileDriver extends Driver implements FileDriverContract
     }
 
     /**
-     * get cache files count
+     * Get cache files count
      *
      * @return int
      */
@@ -151,20 +157,24 @@ class FileDriver extends Driver implements FileDriverContract
      *----------------------------------------*/
 
     /**
-     * whether key exists in storage
+     * Check if key exists in storage
      *
      * @param string $key
      * @return bool
      */
     protected function has(string $key): bool
     {
-        $filePath = $this->filePath($key);
+        try {
+            $filePath = $this->filePath($key);
 
-        return file_exists($filePath) && is_readable($filePath);
+            return file_exists($filePath) && is_readable($filePath);
+        } catch (CacheException) {
+            return false;
+        }
     }
 
     /**
-     * read raw data from storage
+     * Read raw data from storage
      *
      * @param string $key
      * @return mixed
@@ -173,13 +183,13 @@ class FileDriver extends Driver implements FileDriverContract
     {
         $filePath = $this->filePath($key);
 
-        $data = file_get_contents($filePath);
+        $data = @file_get_contents($filePath);
 
-        if ($data === false) throw new \RuntimeException("Failed to read cache file: $filePath");
+        if ($data === false) throw new CacheStorageException("read_file", "Failed to read cache file: $filePath");
 
-        $unserialized = unserialize($data);
+        $unserialized = @unserialize($data);
 
-        if ($unserialized === false && $data !== serialize(false)) throw new \RuntimeException("Failed to unserialize cache data for key: $key");
+        if ($unserialized === false && $data !== serialize(false)) throw new CacheDataCorruptedException("Failed to unserialize cache data for key: $key");
 
         return $unserialized;
     }
@@ -189,7 +199,7 @@ class FileDriver extends Driver implements FileDriverContract
      *----------------------------------------*/
 
     /**
-     * write data to storage
+     * Write data to storage
      *
      * @param string $key
      * @param array $data
@@ -203,7 +213,7 @@ class FileDriver extends Driver implements FileDriverContract
 
         $serialized = serialize($data);
 
-        if (file_put_contents($filePath, $serialized, LOCK_EX) === false) throw new \RuntimeException("Failed to write cache file: $filePath");
+        if (@file_put_contents($filePath, $serialized, LOCK_EX) === false) throw new CacheStorageException("write_file", "Failed to write cache file: $filePath");
     }
 
     /*----------------------------------------*
@@ -211,7 +221,7 @@ class FileDriver extends Driver implements FileDriverContract
      *----------------------------------------*/
 
     /**
-     * remove cache value from storage
+     * Remove cache value from storage
      *
      * @param string $key
      * @return void
@@ -222,11 +232,11 @@ class FileDriver extends Driver implements FileDriverContract
 
         if (!file_exists($filePath)) return;
 
-        if (!unlink($filePath)) throw new \RuntimeException("Failed to delete cache file: {$filePath}");
+        if (!@unlink($filePath)) throw new CacheStorageException("delete_file", "Failed to delete cache file: $filePath");
     }
 
     /**
-     * flush all cache values from storage
+     * Flush all cache values from storage
      *
      * @return void
      */
@@ -236,15 +246,15 @@ class FileDriver extends Driver implements FileDriverContract
             $path = $fileinfo->getRealPath();
 
             if ($fileinfo->isDir()) {
-                if (!rmdir($path)) throw new \RuntimeException("Failed to remove directory: $path");
-            } else if ($fileinfo->isFile()) {
-                if (!unlink($path)) throw new \RuntimeException("Failed to remove file: $path");
+                if (!@rmdir($path)) throw new CacheStorageException("remove_directory", "Failed to remove directory: $path");
+            } elseif ($fileinfo->isFile()) {
+                if (!@unlink($path)) throw new CacheStorageException("remove_file", "Failed to remove file: $path");
             }
         }
     }
 
     /**
-     * clean expired cache values
+     * Clean expired cache values
      *
      * @return int
      */
@@ -256,23 +266,31 @@ class FileDriver extends Driver implements FileDriverContract
             if (!$fileinfo->isFile()) continue;
 
             try {
-                $data = file_get_contents($fileinfo->getRealPath());
+                $data = @file_get_contents($fileinfo->getRealPath());
 
                 if ($data === false) continue;
 
-                $unserialized = unserialize($data);
+                $unserialized = @unserialize($data);
 
-                if ($unserialized === false) continue;
+                if ($unserialized === false) {
+                    @unlink($fileinfo->getRealPath());
+
+                    $count++;
+
+                    continue;
+                }
 
                 $validated = $this->ensureDataStructure($unserialized);
 
                 if (!$this->isExpired($validated)) continue;
 
-                unlink($fileinfo->getRealPath());
+                @unlink($fileinfo->getRealPath());
 
                 $count++;
-            } catch (\Throwable $e) {
-                continue;
+            } catch (CacheException) {
+                @unlink($fileinfo->getRealPath());
+
+                $count++;
             }
         }
 

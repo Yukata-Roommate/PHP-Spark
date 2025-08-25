@@ -14,7 +14,7 @@ interface Driver
      *----------------------------------------*/
 
     /**
-     * load cache value
+     * Load cache value
      *
      * @param string $key
      * @return mixed
@@ -22,7 +22,7 @@ interface Driver
     public function load(string $key): mixed;
 
     /**
-     * safely load cache value
+     * Safely load cache value
      *
      * @param string $key
      * @param mixed $default
@@ -31,7 +31,7 @@ interface Driver
     public function safeLoad(string $key, mixed $default = null): mixed;
 
     /**
-     * load multiple cache values
+     * Load multiple cache values
      *
      * @param array $keys
      * @return array
@@ -39,7 +39,7 @@ interface Driver
     public function loadMany(array $keys): array;
 
     /**
-     * get cache value ensure exists
+     * Get cache value or compute and store if missing
      *
      * @param string $key
      * @param callable $callback
@@ -49,7 +49,7 @@ interface Driver
     public function remember(string $key, callable $callback, int|null $ttl = null): mixed;
 
     /**
-     * whether exists cache value
+     * Check if cache value exists and is valid
      *
      * @param string $key
      * @return bool
@@ -61,17 +61,17 @@ interface Driver
      *----------------------------------------*/
 
     /**
-     * save cache value
+     * Save cache value
      *
      * @param string $key
      * @param mixed $value
      * @param int|null $ttl
-     * @return array
+     * @return bool
      */
-    public function save(string $key, mixed $value, int|null $ttl = null): array;
+    public function save(string $key, mixed $value, int|null $ttl = null): bool;
 
     /**
-     * save multiple cache values
+     * Save multiple cache values
      *
      * @param array $values
      * @param int|null $ttl
@@ -80,7 +80,7 @@ interface Driver
     public function saveMany(array $values, int|null $ttl = null): int;
 
     /**
-     * increment numeric cache value
+     * Increment numeric cache value
      *
      * @param string $key
      * @param int $step
@@ -89,7 +89,7 @@ interface Driver
     public function increment(string $key, int $step = 1): int;
 
     /**
-     * decrement numeric cache value
+     * Decrement numeric cache value
      *
      * @param string $key
      * @param int $step
@@ -102,7 +102,7 @@ interface Driver
      *----------------------------------------*/
 
     /**
-     * delete cache value
+     * Delete cache value
      *
      * @param string $key
      * @return void
@@ -110,21 +110,21 @@ interface Driver
     public function delete(string $key): void;
 
     /**
-     * clear all cache values
+     * Clear all cache values
      *
      * @return void
      */
     public function clear(): void;
 
     /**
-     * clean expired cache values
+     * Clean expired cache values
      *
      * @return int
      */
     public function clean(): int;
 
     /**
-     * delete multiple cache values
+     * Delete multiple cache values
      *
      * @param array $keys
      * @return int
@@ -136,7 +136,7 @@ interface Driver
      *----------------------------------------*/
 
     /**
-     * set default ttl
+     * Set default TTL
      *
      * @param int|null $ttl
      * @return void
@@ -144,7 +144,7 @@ interface Driver
     public function setDefaultTtl(int|null $ttl): void;
 
     /**
-     * get default ttl
+     * Get default TTL
      *
      * @return int|null
      */

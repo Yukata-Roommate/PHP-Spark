@@ -16,7 +16,7 @@ interface MemoryDriver extends Driver
      *----------------------------------------*/
 
     /**
-     * set storage max items
+     * Set storage max items
      *
      * @param int|null $maxItems
      * @return static
@@ -24,7 +24,7 @@ interface MemoryDriver extends Driver
     public function setMaxItems(int|null $maxItems): static;
 
     /**
-     * set storage memory limit
+     * Set storage memory limit in bytes
      *
      * @param int|null $memoryLimit
      * @return static
@@ -32,7 +32,7 @@ interface MemoryDriver extends Driver
     public function setMemoryLimit(int|null $memoryLimit): static;
 
     /**
-     * get memory usage
+     * Get memory usage in bytes
      *
      * @return int
      */

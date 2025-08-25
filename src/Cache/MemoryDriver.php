@@ -5,6 +5,10 @@ namespace Spark\Cache;
 use Spark\Contracts\Cache\MemoryDriver as MemoryDriverContract;
 use Spark\Foundation\Cache\Driver;
 
+use Spark\Exceptions\Cache\CacheException;
+use Spark\Exceptions\Cache\CacheCapacityExceededException;
+use Spark\Exceptions\Cache\InvalidCacheArgumentException;
+
 /**
  * Memory Cache Driver
  *
@@ -17,7 +21,7 @@ class MemoryDriver extends Driver implements MemoryDriverContract
      *----------------------------------------*/
 
     /**
-     * constructor
+     * Constructor
      *
      * @param int|null $maxItems
      * @param int|null $memoryLimit
@@ -33,35 +37,35 @@ class MemoryDriver extends Driver implements MemoryDriverContract
      *----------------------------------------*/
 
     /**
-     * cache storage
+     * Cache storage
      *
      * @var array<string, mixed>
      */
     protected array $storage = [];
 
     /**
-     * storage max items
+     * Storage max items
      *
      * @var int|null
      */
     protected int|null $maxItems = null;
 
     /**
-     * storage memory limit
+     * Storage memory limit in bytes
      *
      * @var int|null
      */
     protected int|null $memoryLimit = null;
 
     /**
-     * set storage max items
+     * Set storage max items
      *
      * @param int|null $maxItems
      * @return static
      */
     public function setMaxItems(int|null $maxItems): static
     {
-        if ($maxItems !== null && $maxItems <= 0) throw new \InvalidArgumentException("Max items must be a positive integer or null.");
+        if ($maxItems !== null && $maxItems <= 0) throw new InvalidCacheArgumentException("Max items must be a positive integer or null, {$maxItems} given.");
 
         $this->maxItems = $maxItems;
 
@@ -75,14 +79,14 @@ class MemoryDriver extends Driver implements MemoryDriverContract
     }
 
     /**
-     * set storage memory limit
+     * Set storage memory limit
      *
      * @param int|null $memoryLimit
      * @return static
      */
     public function setMemoryLimit(int|null $memoryLimit): static
     {
-        if ($memoryLimit !== null && $memoryLimit <= 0) throw new \InvalidArgumentException("Memory limit must be a positive integer or null.");
+        if ($memoryLimit !== null && $memoryLimit <= 0) throw new InvalidCacheArgumentException("Memory limit must be a positive integer or null, {$memoryLimit} given.");
 
         $this->memoryLimit = $memoryLimit;
 
@@ -96,7 +100,7 @@ class MemoryDriver extends Driver implements MemoryDriverContract
     }
 
     /**
-     * get memory usage
+     * Get memory usage in bytes
      *
      * @return int
      */
@@ -116,10 +120,7 @@ class MemoryDriver extends Driver implements MemoryDriverContract
      *----------------------------------------*/
 
     /**
-     * whether key exists in storage
-     *
-     * @param string $key
-     * @return bool
+     * {@inheritDoc}
      */
     protected function has(string $key): bool
     {
@@ -127,29 +128,22 @@ class MemoryDriver extends Driver implements MemoryDriverContract
     }
 
     /**
-     * read raw data from storage
-     *
-     * @param string $key
-     * @return mixed
+     * {@inheritDoc}
      */
     protected function read(string $key): mixed
     {
-        if (!$this->has($key)) throw new \RuntimeException("Cache file does not exist. key: $key");
+        if (!$this->has($key)) throw new CacheException("Cache key does not exist: $key");
 
         return $this->storage[$key];
     }
 
     /**
-     * loaded
-     *
-     * @param string $key
-     * @param array $data
-     * @return void
+     * {@inheritDoc}
      */
     #[\Override]
     protected function loaded(string $key, array &$data): void
     {
-        $this->access($key);
+        $this->updateAccessOrder($key);
     }
 
     /*----------------------------------------*
@@ -157,37 +151,28 @@ class MemoryDriver extends Driver implements MemoryDriverContract
      *----------------------------------------*/
 
     /**
-     * write data to storage
-     *
-     * @param string $key
-     * @param array $data
-     * @return void
+     * {@inheritDoc}
      */
     protected function write(string $key, array $data): void
     {
         $this->storage[$key] = $data;
 
-        $this->access($key);
+        $this->updateAccessOrder($key);
     }
 
     /**
-     * prepare saving
-     *
-     * @param string $key
-     * @param mixed $value
-     * @param int|null $ttl
-     * @return void
+     * {@inheritDoc}
      */
     #[\Override]
     protected function prepareSave(string $key, mixed &$value, int|null $ttl = null): void
     {
         $this->ensureMaxItems($key);
 
-        $this->ensureMemoryLimit($value);
+        $this->ensureMemoryLimit($key, $value);
     }
 
     /**
-     * ensure storage has value capacity
+     * Ensure storage has capacity for new item
      *
      * @param string $key
      * @return void
@@ -204,21 +189,31 @@ class MemoryDriver extends Driver implements MemoryDriverContract
     }
 
     /**
-     * ensure sufficient memory for value
+     * Ensure sufficient memory for value
      *
      * @param mixed $value
      * @return void
      */
-    protected function ensureMemoryLimit(mixed $value): void
+    protected function ensureMemoryLimit(string $key, mixed $value): void
     {
         if ($this->memoryLimit === null) return;
 
-        $size = strlen(serialize($value));
+        $serialized = serialize($value);
 
-        if ($size > $this->memoryLimit) throw new \RuntimeException("Value size exceeds memory limit: $size bytes, limit: {$this->memoryLimit} bytes");
+        $size = strlen($serialized);
 
-        while ($this->memoryUsage() + $size > $this->memoryLimit && count($this->storage) > 0) {
-            $this->evict();
+        if ($size > $this->memoryLimit) throw new CacheCapacityExceededException("Value size ($size bytes) exceeds memory limit ({$this->memoryLimit} bytes)");
+
+        $currentSize = 0;
+
+        if ($this->has($key)) $currentSize = strlen(serialize($this->storage[$key]));
+
+        $netChange = $size - $currentSize;
+
+        while ($this->memoryUsage() + $netChange > $this->memoryLimit && count($this->storage) > 0) {
+            if (count($this->storage) === 1 && $this->has($key)) break;
+
+            $this->evict($key);
         }
     }
 
@@ -227,37 +222,28 @@ class MemoryDriver extends Driver implements MemoryDriverContract
      *----------------------------------------*/
 
     /**
-     * remove cache value from storage
-     *
-     * @param string $key
-     * @return void
+     * {@inheritDoc}
      */
     protected function remove(string $key): void
     {
-        unset($this->storage[$key], $this->accessTimes[$key]);
+        unset($this->storage[$key], $this->accessOrder[$key]);
     }
 
     /**
-     * flush all cache values from storage
-     *
-     * @return void
+     * {@inheritDoc}
      */
     protected function flush(): void
     {
         $this->storage     = [];
-        $this->accessTimes = [];
+        $this->accessOrder = [];
     }
 
     /**
-     * clean expired cache values
-     *
-     * @return int
+     * {@inheritDoc}
      */
     public function clean(): int
     {
         $keys = array_keys($this->storage);
-
-        if (empty($keys)) return 0;
 
         $count = 0;
 
@@ -272,8 +258,10 @@ class MemoryDriver extends Driver implements MemoryDriverContract
                 $this->delete($key);
 
                 $count++;
-            } catch (\Throwable $e) {
-                continue;
+            } catch (CacheException) {
+                $this->delete($key);
+
+                $count++;
             }
         }
 
@@ -281,41 +269,45 @@ class MemoryDriver extends Driver implements MemoryDriverContract
     }
 
     /*----------------------------------------*
-     * Least Recently Used
+     * Least Recently Used (LRU)
      *----------------------------------------*/
 
     /**
-     * access times
+     * Access order for LRU eviction
      *
-     * @var array<string, int>
+     * @var array<string, true>
      */
-    protected array $accessTimes = [];
+    protected array $accessOrder = [];
 
     /**
-     * add access time for key
+     * Update access order for LRU tracking
      *
      * @param string $key
      * @return void
      */
-    protected function access(string $key): void
+    protected function updateAccessOrder(string $key): void
     {
-        $this->accessTimes[$key] = microtime(true);
+        unset($this->accessOrder[$key]);
+
+        $this->accessOrder[$key] = true;
     }
 
     /**
-     * evict least recently used item
+     * Evict least recently used item
      *
+     * @param string|null $excludeKey
      * @return void
      */
-    protected function evict(): void
+    protected function evict(string|null $excludeKey = null): void
     {
-        if (empty($this->accessTimes)) return;
+        if (empty($this->accessOrder)) return;
 
-        // Find the key with the oldest access time
-        $lruKey = array_search(min($this->accessTimes), $this->accessTimes);
+        foreach (array_keys($this->accessOrder) as $lruKey) {
+            if ($excludeKey !== null && $lruKey === $excludeKey) continue;
 
-        if ($lruKey === false) return;
+            $this->remove($lruKey);
 
-        $this->remove($lruKey);
+            return;
+        }
     }
 }

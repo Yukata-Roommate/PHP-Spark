@@ -16,7 +16,7 @@ interface FileDriver extends Driver
      *----------------------------------------*/
 
     /**
-     * set cache directory
+     * Set cache directory
      *
      * @param string $directory
      * @return static
@@ -24,14 +24,14 @@ interface FileDriver extends Driver
     public function setDirectory(string $directory): static;
 
     /**
-     * get disk usage
+     * Get disk usage in bytes
      *
      * @return int
      */
     public function diskUsage(): int;
 
     /**
-     * get cache files count
+     * Get cache files count
      *
      * @return int
      */
