@@ -1,13 +1,13 @@
 {
-    "name": "takeru-yamamoto/sentinel",
-    "description": "Detect issues related to quality of PHP code",
+    "name": "takeru-yamamoto/spark",
+    "description": "Foundation of PHP applications",
     "version": "1.0.0",
     "keywords": [
         "takeru-yamamoto",
         "php",
         "package",
-        "sentinel",
-        "php-sentinel"
+        "spark",
+        "php-spark"
     ],
     "license": "MIT",
     "authors": [
@@ -17,10 +17,11 @@
     ],
     "autoload": {
         "psr-4": {
-            "Sentinel\\": "src"
+            "Spark\\": "src"
         }
     },
     "require": {
-        "php": ">=8.3.0"
+        "php": ">=8.3.0",
+        "twilio/sdk": "^7.13"
     }
 }
